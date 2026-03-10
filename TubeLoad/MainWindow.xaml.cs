@@ -39,6 +39,9 @@ public partial class MainWindow : Window
         _queueService.ProcessItem += ProcessQueueItemAsync;
         _queueService.QueueChanged += () => Dispatcher.Invoke(UpdateQueueUI);
 
+        // Cookie browser selector
+        InitCookieBrowser();
+
         Loaded += MainWindow_Loaded;
         Closed += (_, _) => _dbService.Dispose();
     }
@@ -538,6 +541,38 @@ public partial class MainWindow : Window
             UrlTextBox.Text = url;
             SwitchTab(true);
             SetStatus("URL loaded from history. Click Fetch Info to start.", StatusType.Info);
+        }
+    }
+
+    // ==================== COOKIE BROWSER ====================
+    private void InitCookieBrowser()
+    {
+        var detected = _ytDlpService.CookieBrowser;
+        var items = new List<string>();
+
+        foreach (var browser in YtDlpService.SupportedBrowsers)
+        {
+            var display = char.ToUpper(browser[0]) + browser[1..];
+            if (browser == detected)
+                display += " (Detected)";
+            items.Add(display);
+        }
+
+        CookieBrowserCombo.ItemsSource = items;
+
+        // Select detected browser
+        var idx = Array.IndexOf(YtDlpService.SupportedBrowsers, detected);
+        CookieBrowserCombo.SelectedIndex = idx >= 0 ? idx : 0;
+        BrowserStatusText.Text = $"\u2705 {detected}";
+    }
+
+    private void CookieBrowser_Changed(object sender, SelectionChangedEventArgs e)
+    {
+        if (CookieBrowserCombo.SelectedIndex >= 0 && CookieBrowserCombo.SelectedIndex < YtDlpService.SupportedBrowsers.Length)
+        {
+            var browser = YtDlpService.SupportedBrowsers[CookieBrowserCombo.SelectedIndex];
+            _ytDlpService.CookieBrowser = browser;
+            BrowserStatusText.Text = $"\u2705 {browser}";
         }
     }
 

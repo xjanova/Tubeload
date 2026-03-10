@@ -400,28 +400,56 @@
                         </Grid>
                     </Border>
 
-                    <!-- Output Directory -->
+                    <!-- Output Directory & Cookie Browser -->
                     <Border Grid.Row="3" CornerRadius="12" Padding="16" Margin="0,0,0,20"
                             Background="#161B22" BorderThickness="1" BorderBrush="#2D3748">
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto"/>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
-                                <ColumnDefinition Width="Auto"/>
-                            </Grid.ColumnDefinitions>
-                            <TextBlock Text="&#128193;" FontSize="16" VerticalAlignment="Center" Margin="0,0,10,0"/>
-                            <TextBlock Grid.Column="1" x:Name="OutputDirText"
-                                       Foreground="{StaticResource TextSecondaryBrush}"
-                                       FontSize="13" VerticalAlignment="Center"
-                                       TextTrimming="CharacterEllipsis"/>
-                            <Button Grid.Column="2" Content="Open Folder"
-                                    Style="{StaticResource SecondaryButton}"
-                                    Click="OpenFolderBtn_Click" Margin="8,0,0,0"/>
-                            <Button Grid.Column="3" Content="Browse"
-                                    Style="{StaticResource SecondaryButton}"
-                                    Click="BrowseBtn_Click" Margin="8,0,0,0"/>
-                        </Grid>
+                        <StackPanel>
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="&#128193;" FontSize="16" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                                <TextBlock Grid.Column="1" x:Name="OutputDirText"
+                                           Foreground="{StaticResource TextSecondaryBrush}"
+                                           FontSize="13" VerticalAlignment="Center"
+                                           TextTrimming="CharacterEllipsis"/>
+                                <Button Grid.Column="2" Content="Open Folder"
+                                        Style="{StaticResource SecondaryButton}"
+                                        Click="OpenFolderBtn_Click" Margin="8,0,0,0"/>
+                                <Button Grid.Column="3" Content="Browse"
+                                        Style="{StaticResource SecondaryButton}"
+                                        Click="BrowseBtn_Click" Margin="8,0,0,0"/>
+                            </Grid>
+
+                            <!-- Cookie Browser (for TikTok) -->
+                            <Border Margin="0,12,0,0" CornerRadius="8" Padding="12,8"
+                                    Background="#0D1117" BorderThickness="1" BorderBrush="#1E293B">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="&#127850;" FontSize="14" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                    <TextBlock Grid.Column="1" Text="TikTok Cookie Browser:"
+                                               Foreground="{StaticResource TextSecondaryBrush}"
+                                               FontSize="12" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                                    <ComboBox Grid.Column="2" x:Name="CookieBrowserCombo"
+                                              SelectionChanged="CookieBrowser_Changed"
+                                              Background="#0D1117" Foreground="{StaticResource TextPrimaryBrush}"
+                                              FontSize="12" Padding="8,4" MinWidth="120"
+                                              VerticalAlignment="Center"
+                                              BorderThickness="1" BorderBrush="#2D3748"/>
+                                    <TextBlock Grid.Column="3" x:Name="BrowserStatusText"
+                                               Foreground="#00E676" FontSize="11"
+                                               VerticalAlignment="Center" Margin="10,0,0,0"/>
+                                </Grid>
+                            </Border>
+                        </StackPanel>
                     </Border>
 
                     <!-- Tab Section: Downloads / History -->

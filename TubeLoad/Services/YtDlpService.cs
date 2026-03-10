@@ -17,6 +17,12 @@ public class YtDlpService
         Timeout = TimeSpan.FromMinutes(10)
     };
 
+    // Browser สำหรับดึง cookies (TikTok ต้องการ auth)
+    public string CookieBrowser { get; set; } = "";
+
+    // รายชื่อ browser ที่รองรับ
+    public static readonly string[] SupportedBrowsers = ["chrome", "edge", "firefox", "brave", "opera", "vivaldi"];
+
     public YtDlpService()
     {
         // ใช้โฟลเดอร์ข้าง exe เสมอ (ไม่ว่าจะ debug หรือ release)
@@ -25,6 +31,9 @@ public class YtDlpService
         Directory.CreateDirectory(_toolsDir);
         _ytDlpPath = Path.Combine(_toolsDir, "yt-dlp.exe");
         _ffmpegPath = Path.Combine(_toolsDir, "ffmpeg.exe");
+
+        // Auto-detect browser ที่ติดตั้งอยู่
+        CookieBrowser = DetectBrowser();
     }
 
     public bool IsYtDlpAvailable => File.Exists(_ytDlpPath);
@@ -32,6 +41,56 @@ public class YtDlpService
     public string YtDlpPath => _ytDlpPath;
     public string FfmpegPath => _ffmpegPath;
     public string ToolsDir => _toolsDir;
+
+    /// <summary>ตรวจจับ browser ที่ติดตั้งอยู่ในเครื่อง</summary>
+    public static string DetectBrowser()
+    {
+        var browserPaths = new Dictionary<string, string[]>
+        {
+            ["chrome"] = [
+                @"C:\Program Files\Google\Chrome\Application\chrome.exe",
+                @"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe"
+            ],
+            ["edge"] = [
+                @"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
+                @"C:\Program Files\Microsoft\Edge\Application\msedge.exe"
+            ],
+            ["firefox"] = [
+                @"C:\Program Files\Mozilla Firefox\firefox.exe",
+                @"C:\Program Files (x86)\Mozilla Firefox\firefox.exe"
+            ],
+            ["brave"] = [
+                @"C:\Program Files\BraveSoftware\Brave-Browser\Application\brave.exe",
+                @"C:\Program Files (x86)\BraveSoftware\Brave-Browser\Application\brave.exe"
+            ],
+            ["opera"] = [
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                    @"Programs\Opera\opera.exe")
+            ],
+            ["vivaldi"] = [
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                    @"Vivaldi\Application\vivaldi.exe")
+            ]
+        };
+
+        foreach (var (name, paths) in browserPaths)
+        {
+            if (paths.Any(File.Exists))
+                return name;
+        }
+        return "chrome"; // fallback
+    }
+
+    /// <summary>สร้าง cookie flags สำหรับ URL ที่ต้องการ auth</summary>
+    private string GetCookieFlags(string url)
+    {
+        // TikTok ต้องการ cookies เสมอ
+        if (url.Contains("tiktok.com") && !string.IsNullOrEmpty(CookieBrowser))
+        {
+            return $"--cookies-from-browser {CookieBrowser}";
+        }
+        return "";
+    }
 
     public async Task<(bool success, string message)> DownloadYtDlpAsync(Action<string>? statusCallback = null)
     {
@@ -170,7 +229,8 @@ public class YtDlpService
 
             statusCallback?.Invoke("Fetching video information...");
 
-            var args = $"--dump-json --no-warnings --no-check-certificates \"{url}\"";
+            var cookieFlags = GetCookieFlags(url);
+            var args = $"--dump-json --no-warnings --no-check-certificates {cookieFlags} \"{url}\"";
             var (output, errorOutput, exitCode) = await RunProcessAsync(_ytDlpPath, args, TimeSpan.FromSeconds(60));
 
             if (exitCode != 0 || string.IsNullOrWhiteSpace(output))
@@ -306,7 +366,8 @@ public class YtDlpService
         var outputTemplate = Path.Combine(outputDir, "%(title).100s.%(ext)s");
 
         // --force-overwrites ป้องกัน skip เมื่อไฟล์มีอยู่แล้ว (จะไม่แสดง progress)
-        var commonFlags = "--no-warnings --no-check-certificates --newline --force-overwrites";
+        var cookieFlags = GetCookieFlags(url);
+        var commonFlags = $"--no-warnings --no-check-certificates --newline --force-overwrites {cookieFlags}";
 
         if (formatId == "audio")
         {
