@@ -17,11 +17,18 @@ public class YtDlpService
         Timeout = TimeSpan.FromMinutes(10)
     };
 
-    // Browser สำหรับดึง cookies (TikTok ต้องการ auth)
+    // Browser สำหรับดึง cookies (YouTube + TikTok ต้องการ auth)
     public string CookieBrowser { get; set; } = "";
 
     // รายชื่อ browser ที่รองรับ
     public static readonly string[] SupportedBrowsers = ["chrome", "edge", "firefox", "brave", "opera", "vivaldi"];
+
+    // Track ว่า update แล้วหรือยังใน session นี้
+    private bool _hasUpdatedThisSession;
+
+    // Last error สำหรับ debug
+    public string LastError { get; private set; } = "";
+    public string LastArgs { get; private set; } = "";
 
     public YtDlpService()
     {
@@ -81,18 +88,169 @@ public class YtDlpService
         return "chrome"; // fallback
     }
 
-    /// <summary>สร้าง cookie flags — YouTube + TikTok ต้องการ cookies เพื่อผ่าน bot detection</summary>
-    private string GetCookieFlags(string url)
+    // ==================== YT-DLP UPDATE ====================
+
+    /// <summary>อัพเดต yt-dlp เป็นเวอร์ชันล่าสุด (ดาวน์โหลดใหม่จาก GitHub)</summary>
+    public async Task<(bool success, string message)> UpdateYtDlpAsync(Action<string>? statusCallback = null)
+    {
+        if (_hasUpdatedThisSession)
+            return (true, "Already updated this session.");
+
+        try
+        {
+            statusCallback?.Invoke("Updating yt-dlp to latest version...");
+
+            // ดาวน์โหลดเวอร์ชันล่าสุดจาก GitHub ทับไฟล์เดิม
+            var url = "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe";
+            var tempPath = _ytDlpPath + ".tmp";
+
+            using var response = await _httpClient.GetAsync(url, HttpCompletionOption.ResponseHeadersRead);
+            response.EnsureSuccessStatusCode();
+
+            var totalBytes = response.Content.Headers.ContentLength ?? -1;
+            using var stream = await response.Content.ReadAsStreamAsync();
+            using var fileStream = new FileStream(tempPath, FileMode.Create, FileAccess.Write, FileShare.None);
+
+            var buffer = new byte[81920];
+            long downloaded = 0;
+            int bytesRead;
+
+            while ((bytesRead = await stream.ReadAsync(buffer)) > 0)
+            {
+                await fileStream.WriteAsync(buffer.AsMemory(0, bytesRead));
+                downloaded += bytesRead;
+                if (totalBytes > 0)
+                {
+                    var pct = (double)downloaded / totalBytes * 100;
+                    statusCallback?.Invoke($"Updating yt-dlp... {pct:F0}%");
+                }
+            }
+
+            fileStream.Close();
+
+            // แทนที่ไฟล์เดิม
+            if (File.Exists(_ytDlpPath))
+                File.Delete(_ytDlpPath);
+            File.Move(tempPath, _ytDlpPath);
+
+            _hasUpdatedThisSession = true;
+
+            // ตรวจสอบเวอร์ชันใหม่
+            var (ver, _, _) = await RunProcessAsync(_ytDlpPath, "--version", TimeSpan.FromSeconds(10));
+            var version = ver.Trim();
+
+            statusCallback?.Invoke($"yt-dlp updated to {version}");
+            return (true, $"Updated to {version}");
+        }
+        catch (Exception ex)
+        {
+            statusCallback?.Invoke($"Update failed: {ex.Message}");
+            return (false, ex.Message);
+        }
+    }
+
+    /// <summary>ดึงเวอร์ชัน yt-dlp ปัจจุบัน</summary>
+    public async Task<string> GetYtDlpVersionAsync()
+    {
+        if (!IsYtDlpAvailable) return "not installed";
+        try
+        {
+            var (output, _, _) = await RunProcessAsync(_ytDlpPath, "--version", TimeSpan.FromSeconds(10));
+            return output.Trim();
+        }
+        catch { return "unknown"; }
+    }
+
+    // ==================== COOKIE HANDLING ====================
+
+    /// <summary>สร้าง cookie flags — ใช้กับทุก platform ที่ต้องการ auth</summary>
+    private string GetCookieFlags(string url, bool forceCookies = false)
     {
         if (string.IsNullOrEmpty(CookieBrowser)) return "";
 
-        // YouTube และ TikTok ต้องการ cookies เพื่อผ่าน auth / bot detection
-        if (url.Contains("youtube.com") || url.Contains("youtu.be") || url.Contains("tiktok.com"))
+        bool needsCookies = forceCookies
+            || url.Contains("youtube.com") || url.Contains("youtu.be")
+            || url.Contains("tiktok.com");
+
+        if (needsCookies)
         {
+            // ใช้ --cookies-from-browser browser เพื่อดึง cookies
             return $"--cookies-from-browser {CookieBrowser}";
         }
         return "";
     }
+
+    /// <summary>ตรวจสอบว่า error เป็น bot detection / auth required หรือไม่</summary>
+    private static bool IsBotDetectionError(string error)
+    {
+        if (string.IsNullOrEmpty(error)) return false;
+        var lowerErr = error.ToLowerInvariant();
+        return lowerErr.Contains("sign in to confirm")
+            || lowerErr.Contains("cookies")
+            || lowerErr.Contains("not a bot")
+            || lowerErr.Contains("bot detection")
+            || lowerErr.Contains("login required")
+            || lowerErr.Contains("age-restricted")
+            || lowerErr.Contains("private video")
+            || lowerErr.Contains("authentication");
+    }
+
+    /// <summary>แปลง error เป็นข้อความที่ผู้ใช้เข้าใจ</summary>
+    public static string GetFriendlyError(string error)
+    {
+        if (string.IsNullOrEmpty(error)) return "Unknown error occurred.";
+
+        var lower = error.ToLowerInvariant();
+
+        if (lower.Contains("sign in to confirm") || lower.Contains("not a bot"))
+            return "YouTube requires authentication. Please:\n" +
+                   "1. Make sure you're logged into YouTube in your browser\n" +
+                   "2. Close your browser completely\n" +
+                   "3. Try again\n\n" +
+                   "If it still fails, try updating yt-dlp (Settings > Update yt-dlp)";
+
+        if (lower.Contains("video unavailable") || lower.Contains("not available"))
+            return "This video is unavailable. It may be:\n" +
+                   "- Removed by the uploader\n" +
+                   "- Region-restricted\n" +
+                   "- A live stream that hasn't ended";
+
+        if (lower.Contains("private video"))
+            return "This is a private video. You need to be logged in with access.";
+
+        if (lower.Contains("age-restricted"))
+            return "This video is age-restricted. Please:\n" +
+                   "1. Log into YouTube in your browser\n" +
+                   "2. Close the browser\n" +
+                   "3. Try again with cookies enabled";
+
+        if (lower.Contains("429") || lower.Contains("too many requests") || lower.Contains("rate limit"))
+            return "Too many requests. YouTube has rate-limited you.\n" +
+                   "Please wait a few minutes and try again.";
+
+        if (lower.Contains("network") || lower.Contains("connection") || lower.Contains("timeout"))
+            return "Network error. Please check your internet connection.";
+
+        if (lower.Contains("format") || lower.Contains("requested format"))
+            return "The selected quality is not available.\n" +
+                   "Try selecting 'Best Quality (Auto)' instead.";
+
+        if (lower.Contains("ffmpeg") || lower.Contains("merger") || lower.Contains("muxer"))
+            return "Error merging video and audio.\n" +
+                   "ffmpeg may be missing or corrupted. Try restarting the app.";
+
+        if (lower.Contains("cookies") || lower.Contains("--cookies-from-browser"))
+            return "Cookie reading failed. Please:\n" +
+                   "1. Close your browser completely (check Task Manager)\n" +
+                   "2. Make sure you're logged in to the site\n" +
+                   "3. Try a different browser in Cookie Browser settings";
+
+        // ย่อ error ยาวๆ
+        if (error.Length > 300) error = error[..300] + "...";
+        return error;
+    }
+
+    // ==================== DOWNLOAD TOOLS ====================
 
     public async Task<(bool success, string message)> DownloadYtDlpAsync(Action<string>? statusCallback = null)
     {
@@ -123,6 +281,7 @@ public class YtDlpService
                 }
             }
 
+            _hasUpdatedThisSession = true;
             statusCallback?.Invoke("yt-dlp downloaded successfully!");
             return (true, "yt-dlp downloaded successfully.");
         }
@@ -139,7 +298,6 @@ public class YtDlpService
         try
         {
             statusCallback?.Invoke("Downloading ffmpeg (this may take a few minutes)...");
-            // ใช้ essentials build (เล็กกว่า ~30MB แทน ~130MB)
             var url = "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip";
             var zipPath = Path.Combine(Path.GetTempPath(), "ffmpeg_tubeload.zip");
             var extractDir = Path.Combine(Path.GetTempPath(), "ffmpeg_tubeload_extract");
@@ -176,21 +334,16 @@ public class YtDlpService
 
             System.IO.Compression.ZipFile.ExtractToDirectory(zipPath, extractDir);
 
-            // หา ffmpeg.exe ใน zip
             var ffmpegExe = Directory.GetFiles(extractDir, "ffmpeg.exe", SearchOption.AllDirectories).FirstOrDefault();
             if (ffmpegExe != null)
             {
                 File.Copy(ffmpegExe, _ffmpegPath, true);
 
-                // คัดลอก ffprobe.exe ด้วย (จำเป็นสำหรับบาง format)
                 var ffprobeExe = Directory.GetFiles(extractDir, "ffprobe.exe", SearchOption.AllDirectories).FirstOrDefault();
                 if (ffprobeExe != null)
-                {
                     File.Copy(ffprobeExe, Path.Combine(_toolsDir, "ffprobe.exe"), true);
-                }
             }
 
-            // Cleanup
             try { File.Delete(zipPath); } catch { }
             try { Directory.Delete(extractDir, true); } catch { }
 
@@ -212,6 +365,8 @@ public class YtDlpService
         }
     }
 
+    // ==================== VIDEO INFO (with smart retry) ====================
+
     public string DetectPlatform(string url)
     {
         if (string.IsNullOrWhiteSpace(url)) return "Unknown";
@@ -229,24 +384,124 @@ public class YtDlpService
             if (!IsYtDlpAvailable)
                 return (null, $"yt-dlp.exe not found at:\n{_ytDlpPath}");
 
-            statusCallback?.Invoke("Fetching video information...");
+            // Strategy: ลองกับ cookies ก่อน (YouTube + TikTok มักต้องการ)
+            // ถ้า cookies ล้มเหลว → ลองไม่ใช้ cookies
+            // ถ้ายังล้มเหลว → update yt-dlp แล้วลองใหม่
 
-            var cookieFlags = GetCookieFlags(url);
-            var args = $"--dump-json --no-warnings --no-check-certificates {cookieFlags} \"{url}\"";
-            var (output, errorOutput, exitCode) = await RunProcessAsync(_ytDlpPath, args, TimeSpan.FromSeconds(60));
+            var strategies = new List<(string name, string flags)>();
 
-            if (exitCode != 0 || string.IsNullOrWhiteSpace(output))
+            bool needsCookies = url.Contains("youtube.com") || url.Contains("youtu.be") || url.Contains("tiktok.com");
+
+            if (needsCookies && !string.IsNullOrEmpty(CookieBrowser))
             {
-                var errMsg = !string.IsNullOrWhiteSpace(errorOutput)
-                    ? errorOutput
-                    : "yt-dlp returned no data. Check the URL.";
-                statusCallback?.Invoke($"Error: {errMsg}");
-                return (null, errMsg);
+                // ลอง cookies ก่อน
+                strategies.Add(("with cookies", $"--cookies-from-browser {CookieBrowser}"));
+                // fallback: ลองไม่ใช้ cookies
+                strategies.Add(("without cookies", ""));
+            }
+            else
+            {
+                // ลองไม่ใช้ cookies ก่อน
+                strategies.Add(("direct", ""));
+                if (!string.IsNullOrEmpty(CookieBrowser))
+                    strategies.Add(("with cookies", $"--cookies-from-browser {CookieBrowser}"));
             }
 
-            var json = JObject.Parse(output);
+            string lastError = "";
 
-            // Safe duration parse (handles null JToken)
+            for (int i = 0; i < strategies.Count; i++)
+            {
+                var (stratName, cookieFlags) = strategies[i];
+                statusCallback?.Invoke(i == 0
+                    ? "Fetching video information..."
+                    : $"Retrying ({stratName})...");
+
+                var args = $"--dump-json --no-warnings --no-check-certificates {cookieFlags} \"{url}\"";
+                LastArgs = args;
+
+                var (output, errorOutput, exitCode) = await RunProcessAsync(_ytDlpPath, args, TimeSpan.FromSeconds(60));
+
+                if (exitCode == 0 && !string.IsNullOrWhiteSpace(output))
+                {
+                    // สำเร็จ!
+                    var info = ParseVideoInfo(output, url);
+                    if (info != null)
+                    {
+                        statusCallback?.Invoke($"Found {info.Formats.Count} quality options.");
+                        return (info, "");
+                    }
+                }
+
+                lastError = errorOutput;
+                LastError = errorOutput;
+
+                // ถ้ายังไม่ใช่ strategy สุดท้าย → ถ้าเป็น bot detection ให้ลองต่อ
+                if (i < strategies.Count - 1)
+                {
+                    if (IsBotDetectionError(errorOutput))
+                    {
+                        Debug.WriteLine($"[YtDlp] Strategy '{stratName}' failed (bot detection), trying next...");
+                        continue;
+                    }
+                    // ถ้าไม่ใช่ bot detection error → อาจเป็น error อื่น ลองต่อเผื่อ
+                    Debug.WriteLine($"[YtDlp] Strategy '{stratName}' failed: {errorOutput}");
+                    continue;
+                }
+            }
+
+            // ทุก strategy ล้มเหลว — ลอง update yt-dlp แล้วลองอีกรอบ
+            if (!_hasUpdatedThisSession)
+            {
+                statusCallback?.Invoke("Updating yt-dlp and retrying...");
+                var (updateOk, _) = await UpdateYtDlpAsync(statusCallback);
+
+                if (updateOk)
+                {
+                    // ลองอีกครั้งหลัง update กับ strategy แรก (cookies)
+                    var cookieFlags = needsCookies && !string.IsNullOrEmpty(CookieBrowser)
+                        ? $"--cookies-from-browser {CookieBrowser}"
+                        : "";
+                    var args = $"--dump-json --no-warnings --no-check-certificates {cookieFlags} \"{url}\"";
+                    LastArgs = args;
+
+                    statusCallback?.Invoke("Retrying with updated yt-dlp...");
+                    var (output, errorOutput, exitCode) = await RunProcessAsync(_ytDlpPath, args, TimeSpan.FromSeconds(60));
+
+                    if (exitCode == 0 && !string.IsNullOrWhiteSpace(output))
+                    {
+                        var info = ParseVideoInfo(output, url);
+                        if (info != null)
+                        {
+                            statusCallback?.Invoke($"Found {info.Formats.Count} quality options.");
+                            return (info, "");
+                        }
+                    }
+
+                    lastError = errorOutput;
+                    LastError = errorOutput;
+                }
+            }
+
+            // ทุกอย่างล้มเหลว
+            var friendlyError = GetFriendlyError(lastError);
+            statusCallback?.Invoke($"Error: {friendlyError}");
+            return (null, friendlyError);
+        }
+        catch (Exception ex)
+        {
+            LastError = ex.Message;
+            statusCallback?.Invoke($"Error: {ex.Message}");
+            return (null, ex.Message);
+        }
+    }
+
+    /// <summary>Parse JSON output จาก yt-dlp เป็น VideoInfo</summary>
+    private VideoInfo? ParseVideoInfo(string jsonOutput, string url)
+    {
+        try
+        {
+            var json = JObject.Parse(jsonOutput);
+
             double durationSec = 0;
             var durToken = json["duration"];
             if (durToken != null && durToken.Type != JTokenType.Null)
@@ -340,15 +595,16 @@ public class YtDlpService
                 Height = 0
             });
 
-            statusCallback?.Invoke($"Found {info.Formats.Count} quality options.");
-            return (info, "");
+            return info;
         }
         catch (Exception ex)
         {
-            statusCallback?.Invoke($"Error: {ex.Message}");
-            return (null, ex.Message);
+            Debug.WriteLine($"[YtDlp] ParseVideoInfo failed: {ex.Message}");
+            return null;
         }
     }
+
+    // ==================== DOWNLOAD VIDEO ====================
 
     public async Task DownloadVideoAsync(
         string url,
@@ -363,11 +619,8 @@ public class YtDlpService
     {
         string args;
         var ffmpegDir = Path.GetDirectoryName(_ffmpegPath) ?? "";
-
-        // สร้าง output path ที่ safe (ลบ characters พิเศษ)
         var outputTemplate = Path.Combine(outputDir, "%(title).100s.%(ext)s");
 
-        // --force-overwrites ป้องกัน skip เมื่อไฟล์มีอยู่แล้ว (จะไม่แสดง progress)
         var cookieFlags = GetCookieFlags(url);
         var commonFlags = $"--no-warnings --no-check-certificates --newline --force-overwrites {cookieFlags}";
 
@@ -393,6 +646,7 @@ public class YtDlpService
                    $"{commonFlags} \"{url}\"";
         }
 
+        LastArgs = args;
         statusCallback?.Invoke(DownloadStatus.Downloading);
 
         var psi = new ProcessStartInfo
@@ -413,7 +667,8 @@ public class YtDlpService
         }
         catch (Exception ex)
         {
-            errorCallback?.Invoke($"Cannot start yt-dlp: {ex.Message}");
+            LastError = $"Cannot start yt-dlp: {ex.Message}";
+            errorCallback?.Invoke(GetFriendlyError(LastError));
             statusCallback?.Invoke(DownloadStatus.Failed);
             return;
         }
@@ -422,7 +677,6 @@ public class YtDlpService
         var speedRegex = new Regex(@"at\s+(.+?)\s");
         var etaRegex = new Regex(@"ETA\s+(\S+)");
 
-        // อ่าน stderr แยก thread
         var stderrTask = process.StandardError.ReadToEndAsync();
 
         while (!process.StandardOutput.EndOfStream)
@@ -468,10 +722,13 @@ public class YtDlpService
         }
         else
         {
-            errorCallback?.Invoke(stderr);
+            LastError = stderr;
+            errorCallback?.Invoke(GetFriendlyError(stderr));
             statusCallback?.Invoke(DownloadStatus.Failed);
         }
     }
+
+    // ==================== HELPERS ====================
 
     private async Task<(string output, string error, int exitCode)> RunProcessAsync(
         string fileName, string arguments, TimeSpan? timeout = null)
@@ -497,7 +754,6 @@ public class YtDlpService
             return ("", $"Cannot start process: {ex.Message}", -1);
         }
 
-        // อ่าน stdout + stderr พร้อมกัน (ไม่ deadlock)
         var outputTask = process.StandardOutput.ReadToEndAsync();
         var errorTask = process.StandardError.ReadToEndAsync();
 

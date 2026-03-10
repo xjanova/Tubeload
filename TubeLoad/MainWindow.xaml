@@ -502,6 +502,27 @@
                                                VerticalAlignment="Center" Margin="10,0,0,0"/>
                                 </Grid>
                             </Border>
+
+                            <!-- yt-dlp Update -->
+                            <Border Margin="0,8,0,0" CornerRadius="8" Padding="12,8"
+                                    Background="#0D1117" BorderThickness="1" BorderBrush="#1E293B">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="&#9889;" FontSize="14" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                    <TextBlock Grid.Column="1" x:Name="YtDlpVersionText"
+                                               Text="yt-dlp engine"
+                                               Foreground="{StaticResource TextSecondaryBrush}"
+                                               FontSize="12" VerticalAlignment="Center"/>
+                                    <Button Grid.Column="2" Content="Update yt-dlp"
+                                            Style="{StaticResource SecondaryButton}"
+                                            Click="UpdateYtDlpBtn_Click" Margin="8,0,0,0"
+                                            FontSize="11" Padding="12,4"/>
+                                </Grid>
+                            </Border>
                         </StackPanel>
                     </Border>
 

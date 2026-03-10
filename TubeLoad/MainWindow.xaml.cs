@@ -62,6 +62,27 @@ public partial class MainWindow : Window
         InitDebugMode();
         await EnsureToolsAsync();
         RefreshHistoryBadge();
+
+        // Auto-update yt-dlp ในพื้นหลัง (ไม่ block UI)
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                if (_ytDlpService.IsYtDlpAvailable)
+                {
+                    Dispatcher.Invoke(() => SetStatus("Checking for yt-dlp updates...", StatusType.Info));
+                    var (ok, msg) = await _ytDlpService.UpdateYtDlpAsync();
+                    Dispatcher.Invoke(() =>
+                    {
+                        if (ok)
+                            SetStatus("yt-dlp is up to date. Ready!", StatusType.Success);
+                        else
+                            SetStatus("Ready - Paste a URL and click Fetch Info", StatusType.Success);
+                    });
+                }
+            }
+            catch { /* silent - ไม่ block ผู้ใช้ */ }
+        });
     }
 
     // ==================== DEBUG ====================
@@ -292,9 +313,8 @@ public partial class MainWindow : Window
             else
             {
                 SetStatus("Failed to fetch video info", StatusType.Error);
-                var shortErr = error.Length > 300 ? error[..300] + "..." : error;
-                MessageBox.Show($"Could not fetch video info.\n\nError:\n{shortErr}",
-                    "TubeLoad - Fetch Error", MessageBoxButton.OK, MessageBoxImage.Warning);
+                MessageBox.Show($"Could not fetch video info.\n\n{error}",
+                    "TubeLoad", MessageBoxButton.OK, MessageBoxImage.Warning);
             }
         }
         catch (Exception ex)
@@ -523,9 +543,8 @@ public partial class MainWindow : Window
                 {
                     if (!string.IsNullOrWhiteSpace(error))
                     {
-                        var shortErr = error.Length > 300 ? error[..300] + "..." : error;
-                        MessageBox.Show($"Download failed:\n\n{shortErr}",
-                            "TubeLoad - Download Error", MessageBoxButton.OK, MessageBoxImage.Warning);
+                        MessageBox.Show($"Download failed:\n\n{error}",
+                            "TubeLoad", MessageBoxButton.OK, MessageBoxImage.Warning);
                     }
                 }),
                 item.Cts.Token
@@ -640,6 +659,46 @@ public partial class MainWindow : Window
 
             // บันทึกลง database
             _dbService.SetSetting("cookie_browser", browser);
+        }
+    }
+
+    // ==================== UPDATE YT-DLP ====================
+    private async void UpdateYtDlpBtn_Click(object sender, RoutedEventArgs e)
+    {
+        var btn = sender as Button;
+        if (btn != null) btn.IsEnabled = false;
+
+        SetStatus("Updating yt-dlp...", StatusType.Info);
+        ShowLoading(true, "Updating yt-dlp to latest version...");
+
+        try
+        {
+            var (ok, msg) = await _ytDlpService.UpdateYtDlpAsync(
+                s => Dispatcher.Invoke(() => LoadingText.Text = s));
+
+            if (ok)
+            {
+                SetStatus("yt-dlp updated successfully!", StatusType.Success);
+                // แสดง version ใหม่
+                var ver = await _ytDlpService.GetYtDlpVersionAsync();
+                if (!string.IsNullOrEmpty(ver))
+                    YtDlpVersionText.Text = $"yt-dlp {ver}";
+            }
+            else
+            {
+                SetStatus("yt-dlp update failed", StatusType.Warning);
+                MessageBox.Show($"Update failed:\n\n{msg}",
+                    "TubeLoad", MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
+        }
+        catch (Exception ex)
+        {
+            SetStatus($"Update error: {ex.Message}", StatusType.Error);
+        }
+        finally
+        {
+            ShowLoading(false);
+            if (btn != null) btn.IsEnabled = true;
         }
     }
 
