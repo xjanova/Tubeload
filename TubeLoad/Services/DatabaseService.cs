@@ -38,8 +38,36 @@ public class DatabaseService : IDisposable
                 is_success INTEGER NOT NULL DEFAULT 1
             );
             CREATE INDEX IF NOT EXISTS idx_history_date ON history(downloaded_at DESC);
+
+            CREATE TABLE IF NOT EXISTS settings (
+                key TEXT PRIMARY KEY NOT NULL,
+                value TEXT NOT NULL DEFAULT ''
+            );
         ";
         cmd.ExecuteNonQuery();
+    }
+
+    // ==================== SETTINGS ====================
+    public void SetSetting(string key, string value)
+    {
+        if (_connection == null) return;
+        var cmd = _connection.CreateCommand();
+        cmd.CommandText = @"
+            INSERT INTO settings (key, value) VALUES ($key, $value)
+            ON CONFLICT(key) DO UPDATE SET value = excluded.value";
+        cmd.Parameters.AddWithValue("$key", key);
+        cmd.Parameters.AddWithValue("$value", value);
+        cmd.ExecuteNonQuery();
+    }
+
+    public string GetSetting(string key, string defaultValue = "")
+    {
+        if (_connection == null) return defaultValue;
+        var cmd = _connection.CreateCommand();
+        cmd.CommandText = "SELECT value FROM settings WHERE key = $key";
+        cmd.Parameters.AddWithValue("$key", key);
+        var result = cmd.ExecuteScalar();
+        return result?.ToString() ?? defaultValue;
     }
 
     public void AddHistory(HistoryItem item)

@@ -29,11 +29,20 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
-        _outputDir = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads", "TubeLoad");
+
+        // โหลด output directory จาก settings (ถ้ามี)
+        var savedDir = _dbService.GetSetting("output_dir");
+        _outputDir = !string.IsNullOrEmpty(savedDir) && Directory.Exists(savedDir)
+            ? savedDir
+            : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads", "TubeLoad");
         Directory.CreateDirectory(_outputDir);
         OutputDirText.Text = _outputDir;
         DownloadList.ItemsSource = _downloads;
+
+        // โหลด cookie browser จาก settings
+        var savedBrowser = _dbService.GetSetting("cookie_browser");
+        if (!string.IsNullOrEmpty(savedBrowser))
+            _ytDlpService.CookieBrowser = savedBrowser;
 
         // Queue events
         _queueService.ProcessItem += ProcessQueueItemAsync;
@@ -209,6 +218,24 @@ public partial class MainWindow : Window
                     "TubeLoad - Error", MessageBoxButton.OK, MessageBoxImage.Error);
                 return;
             }
+        }
+
+        // TikTok ต้อง cookies — แจ้งเตือนให้ปิด browser ก่อน
+        if (url.Contains("tiktok.com"))
+        {
+            var browserName = char.ToUpper(_ytDlpService.CookieBrowser[0]) + _ytDlpService.CookieBrowser[1..];
+            var result = MessageBox.Show(
+                $"TikTok requires browser cookies for authentication.\n\n" +
+                $"Please make sure:\n" +
+                $"  1. You are logged into TikTok in {browserName}\n" +
+                $"  2. {browserName} is CLOSED (not running)\n\n" +
+                $"Cookie Browser: {browserName}\n" +
+                $"(You can change this in the settings below)\n\n" +
+                $"Continue?",
+                "TubeLoad - TikTok Authentication",
+                MessageBoxButton.OKCancel, MessageBoxImage.Information);
+
+            if (result != MessageBoxResult.OK) return;
         }
 
         FetchBtn.IsEnabled = false;
@@ -573,6 +600,9 @@ public partial class MainWindow : Window
             var browser = YtDlpService.SupportedBrowsers[CookieBrowserCombo.SelectedIndex];
             _ytDlpService.CookieBrowser = browser;
             BrowserStatusText.Text = $"\u2705 {browser}";
+
+            // บันทึกลง database
+            _dbService.SetSetting("cookie_browser", browser);
         }
     }
 
@@ -584,6 +614,9 @@ public partial class MainWindow : Window
         {
             _outputDir = dialog.FolderName;
             OutputDirText.Text = _outputDir;
+
+            // บันทึกลง database
+            _dbService.SetSetting("output_dir", _outputDir);
         }
     }
 
