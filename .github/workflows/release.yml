@@ -1,0 +1,100 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build & Release
+    runs-on: windows-latest
+
+    steps:
+      # ─── Checkout ───
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # ─── Setup .NET ───
+      - name: Setup .NET 8 SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      # ─── Restore ───
+      - name: Restore NuGet packages
+        run: dotnet restore TubeLoad.sln
+
+      # ─── Publish ───
+      - name: Publish TubeLoad
+        run: >
+          dotnet publish TubeLoad/TubeLoad.csproj
+          --configuration Release
+          --runtime win-x64
+          --self-contained true
+          -p:PublishSingleFile=true
+          -p:IncludeNativeLibrariesForSelfExtract=true
+          -p:Version=1.0.${{ github.run_number }}
+          --output ./publish
+
+      # ─── Zip ───
+      - name: Zip release artifact
+        shell: pwsh
+        run: |
+          Compress-Archive -Path ./publish/TubeLoad.exe -DestinationPath ./publish/TubeLoad-v1.0.${{ github.run_number }}-win-x64.zip
+
+      # ─── Changelog ───
+      - name: Generate changelog
+        id: changelog
+        shell: pwsh
+        run: |
+          $tag = git tag --sort=-v:refname | Select-Object -First 1
+          if ($tag) {
+            $log = git log "$tag..HEAD" --pretty=format:"- %s (%h)" --no-merges
+          } else {
+            $log = git log --pretty=format:"- %s (%h)" --no-merges -20
+          }
+          if ($log -is [array]) {
+            $log = $log -join "`n"
+          }
+          $delimiter = "EOF_$(Get-Random)"
+          "changelog<<$delimiter" | Out-File -Append $env:GITHUB_OUTPUT
+          $log | Out-File -Append $env:GITHUB_OUTPUT
+          $delimiter | Out-File -Append $env:GITHUB_OUTPUT
+
+      # ─── Release ───
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v1.0.${{ github.run_number }}
+          name: "TubeLoad v1.0.${{ github.run_number }}"
+          body: |
+            ## 🎬 TubeLoad v1.0.${{ github.run_number }}
+
+            | Detail | Value |
+            |--------|-------|
+            | **Build** | #${{ github.run_number }} |
+            | **Date** | ${{ github.event.head_commit.timestamp }} |
+            | **Commit** | [`${{ github.sha }}`](${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}) |
+
+            ### 📝 Changes
+            ${{ steps.changelog.outputs.changelog }}
+
+            ---
+
+            ### 📦 Installation
+            1. Download **`TubeLoad-v1.0.${{ github.run_number }}-win-x64.zip`** below
+            2. Extract the zip file
+            3. Run `TubeLoad.exe` — no installation required!
+
+            > **Requirements:** [yt-dlp](https://github.com/yt-dlp/yt-dlp) and [ffmpeg](https://ffmpeg.org/) must be installed and available in PATH
+          draft: false
+          prerelease: false
+          files: |
+            ./publish/TubeLoad-v1.0.${{ github.run_number }}-win-x64.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
