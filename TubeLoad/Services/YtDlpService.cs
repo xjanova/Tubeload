@@ -81,11 +81,13 @@ public class YtDlpService
         return "chrome"; // fallback
     }
 
-    /// <summary>สร้าง cookie flags สำหรับ URL ที่ต้องการ auth</summary>
+    /// <summary>สร้าง cookie flags — YouTube + TikTok ต้องการ cookies เพื่อผ่าน bot detection</summary>
     private string GetCookieFlags(string url)
     {
-        // TikTok ต้องการ cookies เสมอ
-        if (url.Contains("tiktok.com") && !string.IsNullOrEmpty(CookieBrowser))
+        if (string.IsNullOrEmpty(CookieBrowser)) return "";
+
+        // YouTube และ TikTok ต้องการ cookies เพื่อผ่าน auth / bot detection
+        if (url.Contains("youtube.com") || url.Contains("youtu.be") || url.Contains("tiktok.com"))
         {
             return $"--cookies-from-browser {CookieBrowser}";
         }

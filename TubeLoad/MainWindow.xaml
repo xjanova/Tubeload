@@ -477,7 +477,7 @@
                                         Click="BrowseBtn_Click" Margin="8,0,0,0"/>
                             </Grid>
 
-                            <!-- Cookie Browser (for TikTok) -->
+                            <!-- Cookie Browser (for YouTube / TikTok auth) -->
                             <Border Margin="0,12,0,0" CornerRadius="8" Padding="12,8"
                                     Background="#0D1117" BorderThickness="1" BorderBrush="#1E293B">
                                 <Grid>
@@ -487,8 +487,8 @@
                                         <ColumnDefinition Width="*"/>
                                         <ColumnDefinition Width="Auto"/>
                                     </Grid.ColumnDefinitions>
-                                    <TextBlock Text="&#127850;" FontSize="14" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                                    <TextBlock Grid.Column="1" Text="TikTok Cookie Browser:"
+                                    <TextBlock Text="&#128274;" FontSize="14" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                    <TextBlock Grid.Column="1" Text="Cookie Browser (Auth):"
                                                Foreground="{StaticResource TextSecondaryBrush}"
                                                FontSize="12" VerticalAlignment="Center" Margin="0,0,10,0"/>
                                     <ComboBox Grid.Column="2" x:Name="CookieBrowserCombo"

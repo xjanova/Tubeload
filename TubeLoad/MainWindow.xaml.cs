@@ -25,6 +25,7 @@ public partial class MainWindow : Window
     private Border? _selectedQualityBorder;
     private DebugWindow? _debugWindow;
     private string _outputDir;
+    private bool _cookieWarningShown;
 
     public MainWindow()
     {
@@ -220,22 +221,26 @@ public partial class MainWindow : Window
             }
         }
 
-        // TikTok ต้อง cookies — แจ้งเตือนให้ปิด browser ก่อน
-        if (url.Contains("tiktok.com"))
+        // YouTube + TikTok ต้อง cookies — แจ้งเตือนให้ปิด browser ก่อน (แจ้งแค่ครั้งแรก)
+        var needsCookies = url.Contains("tiktok.com") || url.Contains("youtube.com") || url.Contains("youtu.be");
+        if (needsCookies && !_cookieWarningShown)
         {
             var browserName = char.ToUpper(_ytDlpService.CookieBrowser[0]) + _ytDlpService.CookieBrowser[1..];
+            var platform = url.Contains("tiktok.com") ? "TikTok" : "YouTube";
             var result = MessageBox.Show(
-                $"TikTok requires browser cookies for authentication.\n\n" +
+                $"{platform} requires browser cookies to verify you're not a bot.\n\n" +
                 $"Please make sure:\n" +
-                $"  1. You are logged into TikTok in {browserName}\n" +
+                $"  1. You are logged into {platform} in {browserName}\n" +
                 $"  2. {browserName} is CLOSED (not running)\n\n" +
                 $"Cookie Browser: {browserName}\n" +
                 $"(You can change this in the settings below)\n\n" +
+                $"This message will only show once per session.\n\n" +
                 $"Continue?",
-                "TubeLoad - TikTok Authentication",
+                $"TubeLoad - {platform} Authentication",
                 MessageBoxButton.OKCancel, MessageBoxImage.Information);
 
             if (result != MessageBoxResult.OK) return;
+            _cookieWarningShown = true;
         }
 
         FetchBtn.IsEnabled = false;
