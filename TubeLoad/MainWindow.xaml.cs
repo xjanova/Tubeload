@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
+using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Windows;
 using System.Windows.Controls;
@@ -25,11 +26,22 @@ public partial class MainWindow : Window
     private Border? _selectedQualityBorder;
     private DebugWindow? _debugWindow;
     private string _outputDir;
-    private bool _cookieWarningShown;
+
+    public static string AppVersion
+    {
+        get
+        {
+            var ver = Assembly.GetExecutingAssembly().GetName().Version;
+            return ver != null ? $"v{ver.Major}.{ver.Minor}.{ver.Build}" : "v1.0.0";
+        }
+    }
 
     public MainWindow()
     {
         InitializeComponent();
+
+        // แสดง version จาก Assembly (ตรงกับ GitHub Release)
+        VersionText.Text = AppVersion;
 
         // โหลด output directory จาก settings (ถ้ามี)
         var savedDir = _dbService.GetSetting("output_dir");
@@ -240,28 +252,6 @@ public partial class MainWindow : Window
                     "TubeLoad - Error", MessageBoxButton.OK, MessageBoxImage.Error);
                 return;
             }
-        }
-
-        // YouTube + TikTok ต้อง cookies — แจ้งเตือนให้ปิด browser ก่อน (แจ้งแค่ครั้งแรก)
-        var needsCookies = url.Contains("tiktok.com") || url.Contains("youtube.com") || url.Contains("youtu.be");
-        if (needsCookies && !_cookieWarningShown)
-        {
-            var browserName = char.ToUpper(_ytDlpService.CookieBrowser[0]) + _ytDlpService.CookieBrowser[1..];
-            var platform = url.Contains("tiktok.com") ? "TikTok" : "YouTube";
-            var result = MessageBox.Show(
-                $"{platform} requires browser cookies to verify you're not a bot.\n\n" +
-                $"Please make sure:\n" +
-                $"  1. You are logged into {platform} in {browserName}\n" +
-                $"  2. {browserName} is CLOSED (not running)\n\n" +
-                $"Cookie Browser: {browserName}\n" +
-                $"(You can change this in the settings below)\n\n" +
-                $"This message will only show once per session.\n\n" +
-                $"Continue?",
-                $"TubeLoad - {platform} Authentication",
-                MessageBoxButton.OKCancel, MessageBoxImage.Information);
-
-            if (result != MessageBoxResult.OK) return;
-            _cookieWarningShown = true;
         }
 
         FetchBtn.IsEnabled = false;

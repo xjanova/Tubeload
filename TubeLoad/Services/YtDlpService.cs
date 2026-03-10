@@ -163,7 +163,30 @@ public class YtDlpService
 
     // ==================== COOKIE HANDLING ====================
 
-    /// <summary>สร้าง cookie flags — ใช้กับทุก platform ที่ต้องการ auth</summary>
+    /// <summary>Path ไปยังไฟล์ cookies.txt ที่ export จาก browser</summary>
+    public string CookiesFilePath => Path.Combine(_toolsDir, "cookies.txt");
+
+    /// <summary>ตรวจว่ามี cookies.txt ที่ export ไว้แล้ว (ไม่เก่าเกิน 30 นาที)</summary>
+    public bool HasFreshCookiesFile
+    {
+        get
+        {
+            if (!File.Exists(CookiesFilePath)) return false;
+            var age = DateTime.Now - File.GetLastWriteTime(CookiesFilePath);
+            return age.TotalMinutes < 30; // cookies.txt อายุไม่เกิน 30 นาที
+        }
+    }
+
+    /// <summary>Export cookies จาก browser เป็น cookies.txt (ไม่ต้องปิด browser)</summary>
+    public string? ExportCookiesForUrl(string url)
+    {
+        if (string.IsNullOrEmpty(CookieBrowser)) return "No browser configured";
+        if (!CookieService.IsSupported(CookieBrowser)) return $"Browser '{CookieBrowser}' not supported for cookie export";
+
+        return CookieService.ExportCookiesForVideo(CookieBrowser, CookiesFilePath, url);
+    }
+
+    /// <summary>สร้าง cookie flags — ใช้ cookies.txt ก่อน (ไม่ต้องปิด browser), fallback เป็น --cookies-from-browser</summary>
     private string GetCookieFlags(string url, bool forceCookies = false)
     {
         if (string.IsNullOrEmpty(CookieBrowser)) return "";
@@ -174,7 +197,11 @@ public class YtDlpService
 
         if (needsCookies)
         {
-            // ใช้ --cookies-from-browser browser เพื่อดึง cookies
+            // ใช้ cookies.txt ถ้ามี (export มาจาก CookieService — ไม่ต้องปิด browser)
+            if (HasFreshCookiesFile)
+                return $"--cookies \"{CookiesFilePath}\"";
+
+            // fallback: ใช้ --cookies-from-browser (อาจต้องปิด browser)
             return $"--cookies-from-browser {CookieBrowser}";
         }
         return "";
@@ -384,9 +411,11 @@ public class YtDlpService
             if (!IsYtDlpAvailable)
                 return (null, $"yt-dlp.exe not found at:\n{_ytDlpPath}");
 
-            // Strategy: ลองกับ cookies ก่อน (YouTube + TikTok มักต้องการ)
-            // ถ้า cookies ล้มเหลว → ลองไม่ใช้ cookies
-            // ถ้ายังล้มเหลว → update yt-dlp แล้วลองใหม่
+            // Strategy order:
+            // 1. Export cookies จาก browser → ใช้ --cookies cookies.txt (ไม่ต้องปิด browser!)
+            // 2. ลอง --cookies-from-browser (อาจ fail ถ้า browser เปิด)
+            // 3. ลองไม่ใช้ cookies (อาจ fail ถ้าเว็บต้องการ auth)
+            // 4. Auto-update yt-dlp แล้วลองใหม่
 
             var strategies = new List<(string name, string flags)>();
 
@@ -394,9 +423,23 @@ public class YtDlpService
 
             if (needsCookies && !string.IsNullOrEmpty(CookieBrowser))
             {
-                // ลอง cookies ก่อน
-                strategies.Add(("with cookies", $"--cookies-from-browser {CookieBrowser}"));
-                // fallback: ลองไม่ใช้ cookies
+                // #1: Export cookies จาก browser โดยตรง (ไม่ต้องปิด browser)
+                statusCallback?.Invoke("Extracting browser cookies...");
+                var exportError = ExportCookiesForUrl(url);
+                if (exportError == null && HasFreshCookiesFile)
+                {
+                    strategies.Add(("exported cookies", $"--cookies \"{CookiesFilePath}\""));
+                    Debug.WriteLine("[YtDlp] Cookie export successful, using cookies.txt");
+                }
+                else
+                {
+                    Debug.WriteLine($"[YtDlp] Cookie export failed: {exportError}, falling back to --cookies-from-browser");
+                }
+
+                // #2: Fallback ใช้ --cookies-from-browser
+                strategies.Add(("browser cookies", $"--cookies-from-browser {CookieBrowser}"));
+
+                // #3: ลองไม่ใช้ cookies
                 strategies.Add(("without cookies", ""));
             }
             else
@@ -457,10 +500,15 @@ public class YtDlpService
 
                 if (updateOk)
                 {
-                    // ลองอีกครั้งหลัง update กับ strategy แรก (cookies)
-                    var cookieFlags = needsCookies && !string.IsNullOrEmpty(CookieBrowser)
-                        ? $"--cookies-from-browser {CookieBrowser}"
-                        : "";
+                    // ลองอีกครั้งหลัง update — ใช้ cookies.txt ถ้ามี
+                    var cookieFlags = "";
+                    if (needsCookies)
+                    {
+                        if (HasFreshCookiesFile)
+                            cookieFlags = $"--cookies \"{CookiesFilePath}\"";
+                        else if (!string.IsNullOrEmpty(CookieBrowser))
+                            cookieFlags = $"--cookies-from-browser {CookieBrowser}";
+                    }
                     var args = $"--dump-json --no-warnings --no-check-certificates {cookieFlags} \"{url}\"";
                     LastArgs = args;
 
@@ -620,6 +668,10 @@ public class YtDlpService
         string args;
         var ffmpegDir = Path.GetDirectoryName(_ffmpegPath) ?? "";
         var outputTemplate = Path.Combine(outputDir, "%(title).100s.%(ext)s");
+
+        // Export cookies ก่อน download (ไม่ต้องปิด browser)
+        if (!HasFreshCookiesFile && !string.IsNullOrEmpty(CookieBrowser))
+            ExportCookiesForUrl(url);
 
         var cookieFlags = GetCookieFlags(url);
         var commonFlags = $"--no-warnings --no-check-certificates --newline --force-overwrites {cookieFlags}";
