@@ -1,0 +1,238 @@
+<Window x:Class="TubeLoad.DebugWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="TubeLoad - Diagnostic Console"
+        Height="700" Width="850" MinHeight="500" MinWidth="650"
+        WindowStartupLocation="CenterScreen"
+        Background="Transparent"
+        AllowsTransparency="True"
+        WindowStyle="None"
+        ResizeMode="CanResizeWithGrip">
+
+    <Border CornerRadius="16" ClipToBounds="True">
+        <Border.Background>
+            <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                <GradientStop Color="#0A0E14" Offset="0"/>
+                <GradientStop Color="#0D1420" Offset="0.5"/>
+                <GradientStop Color="#0B1018" Offset="1"/>
+            </LinearGradientBrush>
+        </Border.Background>
+        <Border.Effect>
+            <DropShadowEffect BlurRadius="30" ShadowDepth="0" Opacity="0.7" Color="#000000"/>
+        </Border.Effect>
+
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="44"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+            <!-- Title Bar -->
+            <Border Grid.Row="0" MouseLeftButtonDown="TitleBar_MouseLeftButtonDown" Background="Transparent">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+
+                    <StackPanel Orientation="Horizontal" Margin="18,0,0,0" VerticalAlignment="Center">
+                        <Border Width="24" Height="24" CornerRadius="6">
+                            <Border.Background>
+                                <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                    <GradientStop Color="#FF6B35" Offset="0"/>
+                                    <GradientStop Color="#F7C948" Offset="1"/>
+                                </LinearGradientBrush>
+                            </Border.Background>
+                            <TextBlock Text="&#128736;" Foreground="White" FontSize="12"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <TextBlock Text="Diagnostic Console" Foreground="#E6EDF3" FontSize="14"
+                                   FontWeight="Bold" Margin="10,0,0,0" VerticalAlignment="Center"/>
+                        <Border CornerRadius="4" Padding="6,2" Margin="10,0,0,0" VerticalAlignment="Center">
+                            <Border.Background>
+                                <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                                    <GradientStop Color="#FF6B35" Offset="0"/>
+                                    <GradientStop Color="#F7C948" Offset="1"/>
+                                </LinearGradientBrush>
+                            </Border.Background>
+                            <TextBlock Text="DEBUG" Foreground="#0A0E14" FontSize="9"
+                                       FontWeight="ExtraBold" VerticalAlignment="Center"/>
+                        </Border>
+                    </StackPanel>
+
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="0,0,8,0">
+                        <Button Content="&#x2715;" Click="CloseBtn_Click"
+                                Width="36" Height="30" FontSize="12"
+                                Foreground="#8B949E" Background="Transparent" BorderThickness="0"
+                                Cursor="Hand" VerticalContentAlignment="Center"/>
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <!-- Summary Header -->
+            <Border Grid.Row="1" Margin="20,8,20,0" CornerRadius="12" Padding="18,14">
+                <Border.Background>
+                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                        <GradientStop Color="#141B27" Offset="0"/>
+                        <GradientStop Color="#121926" Offset="1"/>
+                    </LinearGradientBrush>
+                </Border.Background>
+                <Border.BorderBrush>
+                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                        <GradientStop Color="#2D3748" Offset="0"/>
+                        <GradientStop Color="#1E293B" Offset="1"/>
+                    </LinearGradientBrush>
+                </Border.BorderBrush>
+                <Border.BorderThickness>1</Border.BorderThickness>
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+
+                    <StackPanel>
+                        <TextBlock x:Name="SummaryText" Text="Running diagnostics..."
+                                   Foreground="#E6EDF3" FontSize="16" FontWeight="SemiBold"/>
+                        <TextBlock x:Name="SummaryDetail" Text="Please wait..."
+                                   Foreground="#8B949E" FontSize="12" Margin="0,4,0,0"/>
+                    </StackPanel>
+
+                    <!-- Pass Count -->
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="16,0,0,0" VerticalAlignment="Center">
+                        <Border CornerRadius="8" Padding="10,5" Background="#0D2818">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#9989;" FontSize="11" Margin="0,0,5,0"/>
+                                <TextBlock x:Name="PassCount" Text="0" Foreground="#00E676"
+                                           FontSize="13" FontWeight="Bold"/>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+
+                    <!-- Warning Count -->
+                    <StackPanel Grid.Column="2" Orientation="Horizontal" Margin="8,0,0,0" VerticalAlignment="Center">
+                        <Border CornerRadius="8" Padding="10,5" Background="#2D2600">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#9888;" FontSize="11" Margin="0,0,5,0"/>
+                                <TextBlock x:Name="WarnCount" Text="0" Foreground="#FFC107"
+                                           FontSize="13" FontWeight="Bold"/>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+
+                    <!-- Fail Count -->
+                    <StackPanel Grid.Column="3" Orientation="Horizontal" Margin="8,0,0,0" VerticalAlignment="Center">
+                        <Border CornerRadius="8" Padding="10,5" Background="#2D0A0A">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#10060;" FontSize="11" Margin="0,0,5,0"/>
+                                <TextBlock x:Name="FailCount" Text="0" Foreground="#FF5252"
+                                           FontSize="13" FontWeight="Bold"/>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+
+                    <!-- Run Tests Button -->
+                    <Button Grid.Column="4" x:Name="TestBtn" Click="TestBtn_Click"
+                            Margin="8,0,0,0" Cursor="Hand" VerticalAlignment="Center"
+                            Background="Transparent" BorderThickness="0">
+                        <Border CornerRadius="8" Padding="12,6" Background="#1A2744">
+                            <TextBlock Text="&#129514; Tests" Foreground="#00B4D8" FontSize="12" FontWeight="Bold"/>
+                        </Border>
+                    </Button>
+
+                    <!-- Re-run Button -->
+                    <Button Grid.Column="5" x:Name="RerunBtn" Click="RerunBtn_Click"
+                            Margin="6,0,0,0" Cursor="Hand" VerticalAlignment="Center"
+                            Background="Transparent" BorderThickness="0">
+                        <Border CornerRadius="8" Padding="12,6">
+                            <Border.Background>
+                                <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                                    <GradientStop Color="#FF6B35" Offset="0"/>
+                                    <GradientStop Color="#F7C948" Offset="1"/>
+                                </LinearGradientBrush>
+                            </Border.Background>
+                            <TextBlock Text="&#128260; Re-run" Foreground="#0A0E14" FontSize="12" FontWeight="Bold"/>
+                        </Border>
+                    </Button>
+                </Grid>
+            </Border>
+
+            <!-- Check Results -->
+            <ScrollViewer Grid.Row="2" Margin="20,12,20,0" VerticalScrollBarVisibility="Auto">
+                <ItemsControl x:Name="CheckList">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Border Margin="0,0,0,6" CornerRadius="10" Padding="14,10"
+                                    BorderThickness="1" BorderBrush="#1E293B">
+                                <Border.Background>
+                                    <SolidColorBrush Color="#111827"/>
+                                </Border.Background>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="30"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+
+                                    <!-- Status Icon -->
+                                    <TextBlock Text="{Binding StatusIcon}" FontSize="16"
+                                               VerticalAlignment="Center" HorizontalAlignment="Center"/>
+
+                                    <!-- Category + Name -->
+                                    <StackPanel Grid.Column="1" Margin="10,0,0,0" VerticalAlignment="Center" Width="180">
+                                        <TextBlock Text="{Binding Name}" FontSize="12"
+                                                   FontWeight="Medium" Foreground="#E6EDF3"/>
+                                        <TextBlock Text="{Binding Category}" FontSize="10"
+                                                   Foreground="#4A5568" Margin="0,2,0,0"/>
+                                    </StackPanel>
+
+                                    <!-- Result + Detail -->
+                                    <StackPanel Grid.Column="2" Margin="14,0,0,0" VerticalAlignment="Center">
+                                        <TextBlock Text="{Binding Result}" FontSize="12"
+                                                   Foreground="#8B949E" TextTrimming="CharacterEllipsis"/>
+                                        <TextBlock Text="{Binding Detail}" FontSize="10"
+                                                   Foreground="#374151" TextTrimming="CharacterEllipsis"
+                                                   Margin="0,2,0,0"/>
+                                    </StackPanel>
+
+                                    <!-- Elapsed Time -->
+                                    <Border Grid.Column="3" CornerRadius="6" Padding="8,3"
+                                            Background="#0D1117" VerticalAlignment="Center">
+                                        <TextBlock Text="{Binding ElapsedMs, StringFormat={}{0}ms}"
+                                                   FontSize="10" Foreground="#4A5568" FontFamily="Consolas"/>
+                                    </Border>
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </ScrollViewer>
+
+            <!-- Footer -->
+            <Border Grid.Row="3" Margin="20,10,20,16" CornerRadius="10" Padding="14,10"
+                    Background="#0D1117" BorderThickness="1" BorderBrush="#1E293B">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="&#128736;" FontSize="12" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                    <TextBlock Grid.Column="1" x:Name="FooterText"
+                               Text="Debug mode only — this window is hidden in Release builds"
+                               Foreground="#4A5568" FontSize="11" VerticalAlignment="Center"/>
+                    <TextBlock Grid.Column="2" Foreground="#374151" FontSize="10" VerticalAlignment="Center"
+                               FontFamily="Consolas">
+                        <Run Text="TubeLoad Diagnostic v1.0"/>
+                    </TextBlock>
+                </Grid>
+            </Border>
+        </Grid>
+    </Border>
+</Window>
