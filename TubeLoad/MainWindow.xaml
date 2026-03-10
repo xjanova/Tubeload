@@ -400,6 +400,59 @@
                         </Grid>
                     </Border>
 
+                    <!-- Mini Video Info Bar (shown when VideoInfoCard is collapsed after download) -->
+                    <Border Grid.Row="2" x:Name="VideoMiniBar" CornerRadius="12" Padding="14,10"
+                            Margin="0,0,0,20" Visibility="Collapsed"
+                            Background="#161B22" BorderThickness="1" BorderBrush="#2D3748">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+
+                            <!-- Thumbnail mini -->
+                            <Border CornerRadius="8" Width="48" Height="32" ClipToBounds="True"
+                                    Margin="0,0,10,0" VerticalAlignment="Center">
+                                <Border.Background>
+                                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                        <GradientStop Color="#2D3748" Offset="0"/>
+                                        <GradientStop Color="#1E293B" Offset="1"/>
+                                    </LinearGradientBrush>
+                                </Border.Background>
+                                <Image x:Name="MiniThumbnailImage" Stretch="UniformToFill"/>
+                            </Border>
+
+                            <!-- Title + quality badge -->
+                            <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="0,0,10,0">
+                                <TextBlock x:Name="MiniBarTitle" Foreground="#E6EDF3"
+                                           FontSize="12" FontWeight="Medium"
+                                           TextTrimming="CharacterEllipsis"/>
+                                <TextBlock x:Name="MiniBarQuality" Foreground="#A78BFA"
+                                           FontSize="10" Margin="0,2,0,0"/>
+                            </StackPanel>
+
+                            <!-- Download another quality button -->
+                            <Button Grid.Column="2" Click="ExpandInfo_Click"
+                                    Style="{StaticResource SecondaryButton}"
+                                    Padding="12,6" Margin="0,0,6,0"
+                                    ToolTip="Change quality or download again">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="&#127916;" FontSize="11" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                                    <TextBlock Text="Change Quality" FontSize="11" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </Button>
+
+                            <!-- Close/dismiss button -->
+                            <Button Grid.Column="3" Click="DismissInfo_Click"
+                                    Background="Transparent" BorderThickness="0"
+                                    Cursor="Hand" Padding="6,4" ToolTip="Dismiss">
+                                <TextBlock Text="✕" Foreground="#4A5568" FontSize="12"/>
+                            </Button>
+                        </Grid>
+                    </Border>
+
                     <!-- Output Directory & Cookie Browser -->
                     <Border Grid.Row="3" CornerRadius="12" Padding="16" Margin="0,0,0,20"
                             Background="#161B22" BorderThickness="1" BorderBrush="#2D3748">

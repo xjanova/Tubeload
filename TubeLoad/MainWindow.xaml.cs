@@ -277,6 +277,7 @@ public partial class MainWindow : Window
                 _selectedQualityBorder = null;
                 UpdateSelectedQualityDisplay();
 
+                VideoMiniBar.Visibility = Visibility.Collapsed;
                 VideoInfoCard.Visibility = Visibility.Visible;
                 SetStatus($"Ready to download: {info.Title}", StatusType.Success);
 
@@ -344,19 +345,50 @@ public partial class MainWindow : Window
         _queueService.Enqueue(queueItem);
         SetStatus($"Added to queue: {vm.Title} ({_queueService.TotalCount} in queue)", StatusType.Info);
 
-        // Auto-scroll main content ลงไปที่ downloads section ให้เห็น progress
+        // Collapse video info card → show mini bar → scroll to downloads
+        CollapseVideoInfo();
+    }
+
+    // ==================== VIDEO INFO COLLAPSE/EXPAND ====================
+    private void CollapseVideoInfo()
+    {
+        VideoInfoCard.Visibility = Visibility.Collapsed;
+
+        // Populate mini bar
+        MiniBarTitle.Text = _currentVideoInfo?.Title ?? "";
+        MiniBarQuality.Text = _selectedFormat != null
+            ? $"✅ {_selectedFormat.QualityLabel} ({_selectedFormat.FormatBadge})"
+            : "";
+        MiniThumbnailImage.Source = ThumbnailImage.Source;
+        VideoMiniBar.Visibility = Visibility.Visible;
+
+        // Scroll to downloads panel
         _ = Dispatcher.InvokeAsync(() =>
         {
-            // Find parent ScrollViewer and scroll to Downloads section
-            var sv = FindChild<ScrollViewer>(this);
-            if (sv != null)
-            {
-                // scroll to show download list area
-                var transform = DownloadsPanel.TransformToAncestor(sv);
-                var point = transform.Transform(new Point(0, 0));
-                sv.ScrollToVerticalOffset(sv.VerticalOffset + point.Y - 100);
-            }
+            DownloadsPanel.BringIntoView();
         }, System.Windows.Threading.DispatcherPriority.Loaded);
+    }
+
+    private void ExpandInfo_Click(object sender, RoutedEventArgs e)
+    {
+        // Show full VideoInfoCard again, hide mini bar
+        VideoMiniBar.Visibility = Visibility.Collapsed;
+        VideoInfoCard.Visibility = Visibility.Visible;
+
+        // Scroll to the VideoInfoCard
+        _ = Dispatcher.InvokeAsync(() =>
+        {
+            VideoInfoCard.BringIntoView();
+        }, System.Windows.Threading.DispatcherPriority.Loaded);
+    }
+
+    private void DismissInfo_Click(object sender, RoutedEventArgs e)
+    {
+        // Dismiss both — user done with this video
+        VideoMiniBar.Visibility = Visibility.Collapsed;
+        VideoInfoCard.Visibility = Visibility.Collapsed;
+        _currentVideoInfo = null;
+        _selectedFormat = null;
     }
 
     // ==================== QUALITY SELECTOR ====================
